@@ -1,0 +1,23 @@
+---
+accounts_dict:
+  groups:
+    - name: danny
+      force: true
+      gid: 501
+      state: present
+  users:
+    - name: svcansible
+      not_managed: true
+      sudoer: true
+      ssh_authorize: true
+    - name: danny
+      append: true
+      comment: "Danny Bennett"
+      force: true
+      groups: "{{ sudoer_group }}"
+      local: no
+      password: 
+      shell: /usr/bin/zsh
+      state: present
+      uid: 501
+...

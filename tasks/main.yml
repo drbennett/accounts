@@ -1,0 +1,108 @@
+---
+- name: Load distro-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+    - "{{ default }}.yml"
+  tags: accounts
+
+- name: "Main block for accounts management"
+  block:
+    - name: Load distro-specific tasks
+      include_tasks: "{{ item }}"
+      with_first_found:
+        - "{{ ansible_distribution }}.yml"
+        - "{{ ansible_os_family }}.yml"
+        - "{{ default }}.yml"
+
+    - name: "Ensure required groups present/absent"
+      group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid | default(omit) }}"
+        state: "{{ item.state }}"
+        system: "{{ item.system | default(omit) }}"
+      loop: "{{ accounts_dict.groups }}"
+
+    - name: "Ensure required users present/absent"
+      user:
+        name: "{{ item.name }}"
+        append: "{{ item.append }}"
+        comment: "{{ item.comment }}"
+        force: "{{ item.force | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+        groups: "{{ item.groups | default(omit) }}"
+        home: "{{ item.home | default(omit) }}"
+        move_home: "{{ item.move_home | default(omit) }}"
+        password: "{{ item.password | default(omit) }}"
+        remove: "{{ item.remove | default(omit) }}"
+        shell: "{{ item.shell }}"
+        state: "{{ item.state }}"
+        uid: "{{ item.uid | default(omit) }}"
+      when: (item.not_managed is undefined) or (not item.not_managed)
+      loop: "{{ accounts_dict.users }}"
+
+    - name: "Set sudo access for accounts"
+      copy:
+        dest: "/etc/sudoers.d/{{ item.name }}"
+        group: root
+        mode: 0440
+        owner: root
+        src: "sudoers.d/{{ item.name }}"
+      when: (item.sudoer is defined) and (item.sudoer)
+      loop: "{{ accounts_dict.users }}"
+
+    - name: "Ensure accounts have .ssh directory"
+      file:
+        force: "{{ item.force | default(omit) }}"
+        group: "{{ item.name }}"
+        mode: 0700
+        owner: "{{ item.name }}"
+        path: "/home/{{ item.name }}/.ssh"
+        state: directory
+      when: (item.ssh is defined and item.ssh) or (item.ssh_authorize is defined)
+      loop: "{{ accounts_dict.users }}"
+
+    - name: "Set sudoers file compliance"
+      copy:
+        dest: /etc/sudoers
+        force: true
+        owner: root
+        group: root
+        mode: "0440"
+        src: sudoers
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: "Set up id_rsa for accounts"
+      copy:
+        dest: "/home/{{ item.name }}/.ssh/"
+        force: "{{ item.force | default(omit) }}"
+        group: "{{ item.name }}"
+        mode: 0600
+        owner: "{{ item.name }}"
+        src: "ssh/{{ item.name }}/"
+      when: (item.ssh is defined) and (item.ssh)
+      loop: "{{ accounts_dict.users }}"
+
+    - name: Set up multiple authorized keys
+      authorized_key:
+        user: "{{ accounts_item.name }}"
+        state: present
+        # key: '{{ accounts_item.name }}'
+        key: "{{ lookup('file', 'ssh/{{ accounts_item.name }}/id_rsa.pub') }}"
+      # with_file: "ssh/{{ accounts_item.name }}/id_rsa.pub"
+      when: (accounts_item.ssh_authorize is defined) and (accounts_item.ssh_authorize)
+      loop: "{{ accounts_dict.users }}"
+      loop_control:
+        loop_var: accounts_item
+
+    - name: "Set sudo access for groups"
+      copy:
+        dest: "/etc/sudoers.d/"
+        force: true
+        group: root
+        mode: 0440
+        owner: root
+        src: "sudoers.d/"
+        validate: /usr/sbin/visudo -cf %s
+...

@@ -1,0 +1,11 @@
+---
+- name: Install default packages
+  block:
+    - apt:
+        name: "{{ distro_item }}"
+        state: present
+      loop: "{{ default_packages }}"
+      loop_control:
+        loop_var: distro_item
+      when: (default_packages)
+...

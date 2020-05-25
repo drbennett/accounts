@@ -1,0 +1,7 @@
+---
+default_packages:
+  - zsh
+  - powerline
+  - fonts-powerline
+sudoer_group: wheel
+...
